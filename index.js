@@ -184,6 +184,24 @@ client.on('messageCreate', (msg) => {
 client.on('interactionCreate', async (i) => {
   let db = carregarDB();
 
+  // ================= PROTEÇÃO INTELIGENTE =================
+  let userId = null;
+
+  if (i.customId.startsWith("g_") || i.customId.startsWith("v_")) {
+    userId = i.customId.split("_")[1];
+  }
+
+  if (i.customId.startsWith("confirm_")) {
+    userId = i.customId.split("_")[1];
+  }
+
+  if (i.customId.startsWith("pack_") || i.customId.startsWith("sell_") || i.customId.startsWith("view_")) {
+    userId = i.customId.split("_")[1];
+  }
+
+  if (userId && i.user.id !== userId) {
+    return i.reply({ content: "Isso não é pra você.", ephemeral: true });
+  }
   // 🔒 PROTEÇÃO GLOBAL
   const id = i.customId.split("_")[1];
   if (id && i.user.id !== id) {
