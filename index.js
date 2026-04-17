@@ -28,9 +28,9 @@ function salvarDB(db) {
   fs.writeFileSync('./db.json', JSON.stringify(db, null, 2));
 }
 
-function garantirUser(db, userId) {
-  if (!db[userId]) {
-    db[userId] = {
+function garantirUser(db, id) {
+  if (!db[id]) {
+    db[id] = {
       cartas: [],
       dinheiro: 5000,
       pacotes: {
@@ -74,7 +74,7 @@ function rolarRaridade() {
   const r = Math.random() * 100;
   let soma = 0;
 
-  for (let t in chances) {
+  for (const t in chances) {
     soma += chances[t];
     if (r <= soma) return t;
   }
@@ -84,28 +84,25 @@ function rolarRaridade() {
 
 // ================= PACKS =================
 const packs = {
-  recruta: { preco: 1000 },
-  shichibukai: { preco: 5000 },
-  almirante: { preco: 10000 },
-  yonkou: { preco: 20000 },
-  rei: { preco: 40000 }
+  recruta: 1000,
+  shichibukai: 5000,
+  almirante: 10000,
+  yonkou: 20000,
+  rei: 40000
 };
 
-// ================= HELPERS =================
-function pegarCarta(raridade) {
-  const lista = cartas[raridade];
-  return {
-    nome: lista[Math.floor(Math.random() * lista.length)],
-    raridade,
-    valor: valores[raridade]
-  };
+// ================= HELP =================
+function pegarCarta(rar) {
+  const list = cartas[rar];
+  const nome = list[Math.floor(Math.random() * list.length)];
+  return { nome, rar, valor: valores[rar] };
 }
 
 // ================= BOT =================
-client.once('ready', () => console.log("Bot online!"));
+client.once("ready", () => console.log("Bot online!"));
 
 // ================= MESSAGE =================
-client.on('messageCreate', (msg) => {
+client.on("messageCreate", (msg) => {
   if (msg.author.bot) return;
 
   const db = carregarDB();
@@ -117,32 +114,30 @@ client.on('messageCreate', (msg) => {
     const rar = rolarRaridade();
     const carta = pegarCarta(rar);
 
-    return msg.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(carta.nome)
-          .setDescription(`Raridade: ${carta.raridade}\nValor: ${carta.valor}`)
-          .setColor("#2b2d31")
-      ],
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`)
-            .setLabel("Guardar")
-            .setStyle(ButtonStyle.Success),
-          new ButtonBuilder()
-            .setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`)
-            .setLabel("Vender")
-            .setStyle(ButtonStyle.Danger)
-        )
-      ]
-    });
+    const embed = new EmbedBuilder()
+      .setTitle(carta.nome)
+      .setDescription(`${carta.rar} - ${carta.valor} GC`)
+      .setColor("#2b2d31");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`g|${id}|${carta.nome}|${carta.rar}`)
+        .setLabel("Guardar")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId(`v|${id}|${carta.rar}`)
+        .setLabel("Vender")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    return msg.reply({ embeds: [embed], components: [row] });
   }
 
   // 🛒 LOJA
   if (msg.content === "!loja") {
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`pack_${id}`)
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`pack|${id}`)
       .setPlaceholder("Escolha um pacote")
       .addOptions(
         Object.keys(packs).map(p => ({
@@ -158,7 +153,7 @@ client.on('messageCreate', (msg) => {
           .setDescription("Escolha um pacote")
           .setColor("#2b2d31")
       ],
-      components: [new ActionRowBuilder().addComponents(select)]
+      components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 
@@ -176,7 +171,7 @@ client.on('messageCreate', (msg) => {
     if (!options.length) return msg.reply("Sem pacotes.");
 
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`openpack_${id}`)
+      .setCustomId(`open|${id}`)
       .setPlaceholder("Abrir pacote")
       .addOptions(options);
 
@@ -185,59 +180,26 @@ client.on('messageCreate', (msg) => {
     });
   }
 
-  // 📜 COLEÇÃO
-  if (msg.content === "!colecao") {
-    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`view_${id}`)
-      .setPlaceholder("Ver coleção")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c,
-          value: String(i)
-        }))
-      );
-
-    return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
-
-  // 💰 VENDER
-  if (msg.content === "!vender") {
-    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`sell_${id}`)
-      .setPlaceholder("Vender carta")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c,
-          value: String(i)
-        }))
-      );
-
-    return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
+  // 💰 CARTEIRA (fix que você perdeu antes)
+  if (msg.content === "!carteira") {
+    return msg.reply(`💰 Você tem ${db[id].dinheiro} GC`);
   }
 });
 
 // ================= INTERACTIONS =================
-client.on('interactionCreate', async (i) => {
+client.on("interactionCreate", async (i) => {
   try {
     if (!i.customId) return;
 
     const db = carregarDB();
-    const parts = i.customId.split("_");
+    const parts = i.customId.split("|");
+
     const type = parts[0];
-    const userId = parts[1] || i.user.id;
+    const id = parts[1];
 
-    garantirUser(db, userId);
+    garantirUser(db, id);
 
-    // 🔒 SEGURANÇA
-    if (userId && i.user.id !== userId) {
+    if (i.user.id !== id) {
       return i.reply({ content: "Isso não é pra você.", ephemeral: true });
     }
 
@@ -245,34 +207,22 @@ client.on('interactionCreate', async (i) => {
     if (i.isButton()) {
 
       if (type === "g") {
-        const [, id, nome, rar] = parts;
+        const nome = parts[2];
+        const rar = parts[3];
+
         db[id].cartas.push(`${nome} (${rar})`);
         salvarDB(db);
+
         return i.update({ content: "Guardado!", components: [] });
       }
 
       if (type === "v") {
-        const rar = parts[3];
-        db[userId].dinheiro += valores[rar];
+        const rar = parts[2];
+
+        db[id].dinheiro += valores[rar];
         salvarDB(db);
+
         return i.update({ content: "Vendido!", components: [] });
-      }
-
-      if (type === "confirm") {
-        const pack = parts[2];
-
-        if (db[userId].dinheiro < packs[pack].preco)
-          return i.reply({ content: "Sem dinheiro.", ephemeral: true });
-
-        db[userId].dinheiro -= packs[pack].preco;
-        db[userId].pacotes[pack]++;
-
-        salvarDB(db);
-
-        return i.update({
-          content: `Comprou pacote ${pack}`,
-          components: []
-        });
       }
     }
 
@@ -282,17 +232,22 @@ client.on('interactionCreate', async (i) => {
       if (type === "pack") {
         const pack = i.values[0];
 
+        const preco = packs[pack];
+        const saldo = db[id].dinheiro;
+
         return i.update({
           embeds: [
             new EmbedBuilder()
               .setTitle(`Pacote: ${pack}`)
-              .setDescription(`Preço: ${packs[pack].preco}`)
+              .setDescription(
+                `💰 Preço: ${preco}\n💳 Seu saldo: ${saldo}`
+              )
               .setColor("#2b2d31")
           ],
           components: [
             new ActionRowBuilder().addComponents(
               new ButtonBuilder()
-                .setCustomId(`confirm_${userId}_${pack}`)
+                .setCustomId(`buy|${id}|${pack}`)
                 .setLabel("Comprar")
                 .setStyle(ButtonStyle.Success)
             )
@@ -300,18 +255,18 @@ client.on('interactionCreate', async (i) => {
         });
       }
 
-      if (type === "openpack") {
+      if (type === "open") {
         const pack = i.values[0];
 
-        if (db[userId].pacotes[pack] <= 0)
+        if (db[id].pacotes[pack] <= 0)
           return i.reply({ content: "Sem pacotes.", ephemeral: true });
 
-        db[userId].pacotes[pack]--;
+        db[id].pacotes[pack]--;
 
         const rar = rolarRaridade();
         const carta = pegarCarta(rar);
 
-        db[userId].cartas.push(`${carta.nome} (${carta.raridade})`);
+        db[id].cartas.push(`${carta.nome} (${carta.rar})`);
 
         salvarDB(db);
 
@@ -320,26 +275,29 @@ client.on('interactionCreate', async (i) => {
           components: []
         });
       }
+    }
 
-      if (type === "sell") {
-        const index = i.values[0];
-        const carta = db[userId].cartas[index];
-        const rar = carta.match(/\((.*?)\)/)[1];
+    // ================= BUY =================
+    if (type === "buy") {
+      const pack = parts[2];
 
-        db[userId].dinheiro += valores[rar];
-        db[userId].cartas.splice(index, 1);
-        salvarDB(db);
+      if (db[id].dinheiro < packs[pack])
+        return i.reply({ content: "Sem dinheiro.", ephemeral: true });
 
-        return i.update({ content: `Vendeu ${carta}`, components: [] });
-      }
+      db[id].dinheiro -= packs[pack];
+      db[id].pacotes[pack]++;
 
-      if (type === "view") {
-        return i.update({ content: db[userId].cartas[i.values[0]] });
-      }
+      salvarDB(db);
+
+      return i.update({
+        content: `Comprou ${pack}`,
+        components: []
+      });
     }
 
   } catch (err) {
-    console.log(err);
+    console.log("ERRO:", err);
+
     if (!i.replied) {
       return i.reply({ content: "Erro interno", ephemeral: true });
     }
