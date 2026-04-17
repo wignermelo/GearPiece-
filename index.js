@@ -1,3 +1,4 @@
+
 const {
   Client,
   GatewayIntentBits,
@@ -28,6 +29,7 @@ function salvarDB(db) {
   fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
 }
 
+// ================= USER =================
 function garantirUser(db, id) {
   if (!db[id]) {
     db[id] = {
@@ -40,31 +42,25 @@ function garantirUser(db, id) {
         yonkou: 0,
         rei: 0
       },
-      tripulacao: {
-        slots: [null, null, null, null, null],
-        formacao: "2-1-2"
-      }
+      tripulacao: [null, null, null, null, null],
+      elo: 1000
     };
   }
 }
 
-// ================= CARTAS (COM STATS) =================
+// ================= CARTAS =================
 const cartas = {
   Comum: [
-    { nome: "Nami Base", atk: 10, def: 10, hp: 50, over: 10, classe: "Suporte" },
-    { nome: "Usopp Base", atk: 12, def: 8, hp: 45, over: 10, classe: "Físico" }
+    { nome: "Nami Base", atk: 10, def: 10, hp: 50, over: 10, classe: "Suporte" }
   ],
   Raro: [
-    { nome: "Zoro Base", atk: 30, def: 20, hp: 120, over: 25, classe: "Físico" },
-    { nome: "Sanji Base", atk: 28, def: 18, hp: 110, over: 25, classe: "Físico" }
+    { nome: "Zoro Base", atk: 30, def: 20, hp: 120, over: 25, classe: "Físico" }
   ],
   Epico: [
-    { nome: "Zoro Enma", atk: 80, def: 50, hp: 300, over: 60, classe: "Físico" },
-    { nome: "Law", atk: 70, def: 40, hp: 280, over: 58, classe: "Mágico" }
+    { nome: "Law", atk: 70, def: 40, hp: 280, over: 60, classe: "Mágico" }
   ],
   Lendario: [
-    { nome: "Shanks", atk: 120, def: 90, hp: 500, over: 85, classe: "Físico" },
-    { nome: "Mihawk", atk: 130, def: 80, hp: 480, over: 88, classe: "Físico" }
+    { nome: "Shanks", atk: 120, def: 90, hp: 500, over: 85, classe: "Físico" }
   ],
   Mitico: [
     { nome: "Luffy Gear 5", atk: 200, def: 150, hp: 800, over: 100, classe: "Mágico" }
@@ -123,130 +119,131 @@ client.on("messageCreate", (msg) => {
   const id = msg.author.id;
   garantirUser(db, id);
 
+  const user = db[id];
+
   // 🎴 RECRUTAR
   if (msg.content === "!recrutar") {
     const rar = rolarRaridade();
     const carta = pegarCarta(rar);
 
-    db[id].cartas.push(carta);
-
+    user.cartas.push(carta);
     salvarDB(db);
 
-    const embed = new EmbedBuilder()
-      .setTitle(carta.nome)
-      .setDescription(`ATK: ${carta.atk} | DEF: ${carta.def} | HP: ${carta.hp} | OVER: ${carta.over}`)
-      .setColor("#2b2d31");
-
-    return msg.reply({ embeds: [embed] });
+    return msg.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(carta.nome)
+          .setDescription(
+            `ATK:${carta.atk} DEF:${carta.def} HP:${carta.hp} OVER:${carta.over}`
+          )
+          .setColor("#2b2d31")
+      ]
+    });
   }
 
   // 💰 CARTEIRA
   if (msg.content === "!carteira") {
-    return msg.reply(`💰 ${db[id].dinheiro} GC`);
+    return msg.reply(`💰 ${user.dinheiro} GC`);
   }
 
-  // 📦 PACOTE
+  // 📦 PACOTES
   if (msg.content === "!pacote") {
-    const user = db[id];
-
     const options = Object.keys(user.pacotes)
       .filter(p => user.pacotes[p] > 0)
-      .map(p => ({ label: `${p} (${user.pacotes[p]})`, value: p }));
+      .map(p => ({
+        label: `${p} (${user.pacotes[p]})`,
+        value: p
+      }));
 
     if (!options.length) return msg.reply("Sem pacotes.");
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`open|${id}`)
-      .setPlaceholder("Abrir pacote")
-      .addOptions(options);
-
     return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
+      components: [
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`open|${id}`)
+            .setPlaceholder("Abrir pacote")
+            .addOptions(options)
+        )
+      ]
     });
   }
 
   // 📜 COLEÇÃO
   if (msg.content === "!colecao") {
-    if (!db[id].cartas.length)
-      return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`view|${id}`)
-      .setPlaceholder("Ver carta")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c.nome,
-          value: String(i)
-        }))
-      );
+    if (!user.cartas.length) return msg.reply("Sem cartas.");
 
     return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
-
-  // 💰 VENDER
-  if (msg.content === "!vender") {
-    if (!db[id].cartas.length)
-      return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`sell|${id}`)
-      .setPlaceholder("Vender carta")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c.nome,
-          value: String(i)
-        }))
-      );
-
-    return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
+      components: [
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`view|${id}`)
+            .setPlaceholder("Ver carta")
+            .addOptions(
+              user.cartas.map((c, i) => ({
+                label: c.nome,
+                value: String(i)
+              }))
+            )
+        )
+      ]
     });
   }
 
   // ⚔️ TRIPULAÇÃO
   if (msg.content === "!tripulacao") {
-    return msg.reply("Sistema de tripulação ativo (slots + formação pronto)");
+    return msg.reply(
+      user.tripulacao.map((c, i) => `Slot ${i + 1}: ${c ? c.nome : "Vazio"}`).join("\n")
+    );
+  }
+
+  // 🏆 ARENA
+  if (msg.content === "!arena") {
+    const ranking = Object.entries(db)
+      .sort((a, b) => b[1].elo - a[1].elo)
+      .slice(0, 10);
+
+    return msg.reply(
+      ranking.map((u, i) => `${i + 1}. <@${u[0]}> - ${u[1].elo} ELO`).join("\n")
+    );
   }
 });
 
-// ================= BATALHA =================
-client.on("interactionCreate", async (i) => {
-  try {
-    const db = carregarDB();
-    const [type, id, ...args] = i.customId.split("|");
+// ================= PvP =================
+client.on("messageCreate", (msg) => {
+  if (!msg.content.startsWith("/desafiar")) return;
 
-    if (i.user.id !== id) return;
+  const db = carregarDB();
+  const id = msg.author.id;
+  const alvo = msg.mentions.users.first();
+  if (!alvo) return msg.reply("Mencione alguém");
 
-    garantirUser(db, id);
+  const p1 = db[id];
+  const p2 = db[alvo.id];
 
-    if (i.isStringSelectMenu()) {
+  if (!p2 || !p2.cartas.length) return msg.reply("Inimigo sem cartas");
 
-      if (type === "sell") {
-        const index = i.values[0];
-        const carta = db[id].cartas[index];
+  const c1 = p1.cartas[Math.floor(Math.random() * p1.cartas.length)];
+  const c2 = p2.cartas[Math.floor(Math.random() * p2.cartas.length)];
 
-        db[id].dinheiro += 500;
-        db[id].cartas.splice(index, 1);
+  const v1 = c1.atk + c1.def + c1.hp + Math.random() * 100 + p1.elo;
+  const v2 = c2.atk + c2.def + c2.hp + Math.random() * 100 + p2.elo;
 
-        salvarDB(db);
+  let res = "";
 
-        return i.update({ content: `Vendeu ${carta.nome}`, components: [] });
-      }
-
-      if (type === "view") {
-        return i.update({
-          content: db[id].cartas[i.values[0]].nome,
-          components: []
-        });
-      }
-    }
-
-  } catch (e) {
-    console.log(e);
-    if (!i.replied) i.reply({ content: "Erro", ephemeral: true });
+  if (v1 > v2) {
+    p1.elo += 25;
+    p2.elo -= 20;
+    res = "🏆 Você venceu!";
+  } else {
+    p1.elo -= 20;
+    p2.elo += 25;
+    res = "💀 Você perdeu!";
   }
+
+  salvarDB(db);
+
+  msg.reply(`⚔️ ${c1.nome} vs ${c2.nome}\n\n${res}`);
 });
 
 client.login(process.env.TOKEN);
