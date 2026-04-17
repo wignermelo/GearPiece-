@@ -1,4 +1,13 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle,
+  StringSelectMenuBuilder
+} = require('discord.js');
+
 const fs = require('fs');
 
 const client = new Client({
@@ -41,34 +50,15 @@ const valores = {
   Mitico: 30000
 };
 
-// ================= CHANCES =================
-function rolarRaridade(chances) {
-  const r = Math.random() * 100;
-  let soma = 0;
-
-  for (let tipo in chances) {
-    soma += chances[tipo];
-    if (r <= soma) return tipo;
-  }
-}
-
-const chancesBase = {
-  Comum: 60,
-  Raro: 30,
-  Epico: 8,
-  Lendario: 1.5,
-  Mitico: 0.5
-};
-
+// ================= PACKS =================
 const packs = {
-  recruta: { preco: 1000, chances: { Comum: 70, Raro: 25, Epico: 5, Lendario: 0, Mitico: 0 } },
-  shichibukai: { preco: 5000, chances: { Comum: 50, Raro: 35, Epico: 13, Lendario: 2, Mitico: 0 } },
-  almirante: { preco: 10000, chances: { Comum: 30, Raro: 40, Epico: 20, Lendario: 8, Mitico: 2 } },
-  yonkou: { preco: 20000, chances: { Comum: 15, Raro: 35, Epico: 30, Lendario: 15, Mitico: 5 } },
-  rei: { preco: 40000, chances: { Comum: 5, Raro: 20, Epico: 35, Lendario: 25, Mitico: 15 } }
+  recruta: { preco: 1000 },
+  shichibukai: { preco: 5000 },
+  almirante: { preco: 10000 },
+  yonkou: { preco: 20000 },
+  rei: { preco: 40000 }
 };
 
-// ================= FUNÇÕES =================
 function pegarCarta(raridade) {
   const lista = cartas[raridade];
   const nome = lista[Math.floor(Math.random() * lista.length)];
@@ -80,12 +70,19 @@ function pegarCarta(raridade) {
   };
 }
 
-function painel(titulo, desc, user) {
+function painelLoja(user, pack, db) {
+  const preco = packs[pack].preco;
+  const saldo = db[user.id].dinheiro;
+  const restante = saldo - preco;
+
   return new EmbedBuilder()
-    .setTitle(titulo)
-    .setDescription(desc)
-    .setColor("#2b2d31")
-    .setAuthor({ name: user.username, iconURL: user.displayAvatarURL() });
+    .setTitle(`Pacote: ${pack}`)
+    .setDescription(
+`💰 Preço: ${preco} GC
+💳 Seu saldo: ${saldo} GC
+📉 Após compra: ${restante >= 0 ? restante : "Saldo insuficiente"}`
+    )
+    .setColor("#2b2d31");
 }
 
 // ================= BOT =================
@@ -101,14 +98,14 @@ client.on('messageCreate', (msg) => {
 
   // 🎴 RECRUTAR
   if (msg.content === "!recrutar") {
-    const raridade = rolarRaridade(chancesBase);
+    const raridades = ["Comum","Raro","Epico","Lendario","Mitico"];
+    const raridade = raridades[Math.floor(Math.random() * raridades.length)];
     const carta = pegarCarta(raridade);
 
-    const embed = painel(
-      "Recrutamento",
-      `${carta.nome}\nRaridade: ${carta.raridade}\nValor: ${carta.valor} GC`,
-      msg.author
-    );
+    const embed = new EmbedBuilder()
+      .setTitle(carta.nome)
+      .setDescription(`Raridade: ${carta.raridade}\nValor: ${carta.valor} GC`)
+      .setColor("#2b2d31");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`).setLabel("Guardar").setStyle(ButtonStyle.Success),
@@ -118,95 +115,149 @@ client.on('messageCreate', (msg) => {
     return msg.reply({ embeds: [embed], components: [row] });
   }
 
-  // 🛒 LOJA
+  // 🛒 LOJA NOVA
   if (msg.content === "!loja") {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("buy_recruta").setLabel("Recruta").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("buy_shichibukai").setLabel("Shichibukai").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("buy_almirante").setLabel("Almirante").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("buy_yonkou").setLabel("Yonkou").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("buy_rei").setLabel("Rei").setStyle(ButtonStyle.Danger)
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`pack_${id}`)
+      .setPlaceholder("Escolha um pacote")
+      .addOptions(
+        Object.keys(packs).map(p => ({
+          label: p,
+          value: p
+        }))
+      );
+
+    const row = new ActionRowBuilder().addComponents(select);
+
+    const confirm = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`confirm_${id}_recruta`).setLabel("Comprar").setStyle(ButtonStyle.Success)
     );
 
-    return msg.reply({ content: "Escolha um pacote:", components: [row] });
-  }
-
-  // 📜 COLEÇÃO (ARRUMADO BUG)
-  if (msg.content === "!colecao") {
-    const lista = db[id].cartas.map((c, i) => `${i + 1}. ${c}`);
     return msg.reply({
-      embeds: [painel("Coleção", lista.join("\n") || "Vazia", msg.author)]
+      embeds: [painelLoja(msg.author, "recruta", db)],
+      components: [row, confirm]
     });
   }
 
-  // 💰 CARTEIRA (ARRUMADO BUG)
-  if (msg.content === "!carteira") {
+  // 📜 COLEÇÃO MENU
+  if (msg.content === "!colecao") {
+    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`view_${id}`)
+      .setPlaceholder("Ver carta")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: i.toString()
+        }))
+      );
+
     return msg.reply({
-      embeds: [painel("Carteira", `Saldo: ${db[id].dinheiro} GC`, msg.author)]
+      content: "Sua coleção:",
+      components: [new ActionRowBuilder().addComponents(menu)]
+    });
+  }
+
+  // 💰 VENDER MENU
+  if (msg.content === "!vender") {
+    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`sell_${id}`)
+      .setPlaceholder("Vender carta")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: i.toString()
+        }))
+      );
+
+    return msg.reply({
+      content: "Escolha uma carta:",
+      components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 });
 
-// ================= BOTÕES =================
+// ================= INTERAÇÕES =================
 client.on('interactionCreate', async (i) => {
-  if (!i.isButton()) return;
-
-  const [acao, id, nome, raridade] = i.customId.split("_");
-
-  // 🔒 PROTEÇÃO (AGORA FUNCIONA CERTO)
-  if (i.user.id !== id) {
-    return i.reply({ content: "Esse botão não é pra você.", ephemeral: true });
-  }
-
   let db = carregarDB();
-  garantirUser(db, id);
 
-  // GUARDAR
-  if (acao === "g") {
-    db[id].cartas.push(`${nome} (${raridade})`);
-    salvarDB(db);
-    return i.update({ content: "Guardado!", embeds: [], components: [] });
+  // 🔒 PROTEÇÃO GLOBAL
+  const id = i.customId.split("_")[1];
+  if (id && i.user.id !== id) {
+    return i.reply({ content: "Isso não é pra você.", ephemeral: true });
   }
 
-  // VENDER
-  if (acao === "v") {
-    db[id].dinheiro += valores[raridade];
-    salvarDB(db);
-    return i.update({
-      content: `Vendido por ${valores[raridade]} GC`,
-      embeds: [],
-      components: []
-    });
+  // BOTÕES
+  if (i.isButton()) {
+
+    if (i.customId.startsWith("g_")) {
+      const [, id, nome, raridade] = i.customId.split("_");
+      db[id].cartas.push(`${nome} (${raridade})`);
+      salvarDB(db);
+      return i.update({ content: "Guardado!", components: [] });
+    }
+
+    if (i.customId.startsWith("v_")) {
+      const [, id, , raridade] = i.customId.split("_");
+      db[id].dinheiro += valores[raridade];
+      salvarDB(db);
+      return i.update({ content: "Vendido!", components: [] });
+    }
+
+    if (i.customId.startsWith("confirm_")) {
+      const [, id, pack] = i.customId.split("_");
+
+      if (db[id].dinheiro < packs[pack].preco)
+        return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+
+      db[id].dinheiro -= packs[pack].preco;
+
+      const raridade = Object.keys(cartas)[Math.floor(Math.random()*5)];
+      const carta = pegarCarta(raridade);
+
+      salvarDB(db);
+
+      return i.reply({ content: `Você ganhou: ${carta.nome}` });
+    }
   }
 
-  // 🛒 COMPRA DIRETA PELO BOTÃO (SEM CRASH)
-  if (i.customId.startsWith("buy_")) {
-    const tipo = i.customId.split("_")[1];
+  // SELECT MENU
+  if (i.isStringSelectMenu()) {
 
-    if (!packs[tipo]) return;
+    const [tipo, id] = i.customId.split("_");
 
-    if (db[id].dinheiro < packs[tipo].preco)
-      return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+    if (tipo === "pack") {
+      const pack = i.values[0];
 
-    db[id].dinheiro -= packs[tipo].preco;
+      const confirm = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`confirm_${id}_${pack}`).setLabel("Comprar").setStyle(ButtonStyle.Success)
+      );
 
-    const raridadePack = rolarRaridade(packs[tipo].chances);
-    const carta = pegarCarta(raridadePack);
+      return i.update({
+        embeds: [painelLoja(i.user, pack, db)],
+        components: [i.message.components[0], confirm]
+      });
+    }
 
-    salvarDB(db);
+    if (tipo === "sell") {
+      const index = i.values[0];
+      const carta = db[id].cartas[index];
+      const raridade = carta.match(/\((.*?)\)/)[1];
 
-    const embed = painel(
-      "Pacote aberto",
-      `${carta.nome}\nRaridade: ${carta.raridade}\nValor: ${carta.valor} GC`,
-      i.user
-    );
+      db[id].dinheiro += valores[raridade];
+      db[id].cartas.splice(index, 1);
+      salvarDB(db);
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`).setLabel("Guardar").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`).setLabel("Vender").setEmoji("🏴‍☠️").setStyle(ButtonStyle.Danger)
-    );
+      return i.update({ content: `Vendeu ${carta}`, components: [] });
+    }
 
-    return i.reply({ embeds: [embed], components: [row] });
+    if (tipo === "view") {
+      const carta = db[id].cartas[i.values[0]];
+      return i.update({ content: `Carta: ${carta}` });
+    }
   }
 });
 
