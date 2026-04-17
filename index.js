@@ -11,7 +11,11 @@ const {
 const fs = require('fs');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 // ================= DB =================
@@ -26,10 +30,7 @@ function salvarDB(db) {
 
 function garantirUser(db, userId) {
   if (!db[userId]) {
-    db[userId] = {
-      cartas: [],
-      dinheiro: 5000
-    };
+    db[userId] = { cartas: [], dinheiro: 5000 };
   }
 }
 
@@ -50,7 +51,6 @@ const valores = {
   Mitico: 30000
 };
 
-// ================= PACKS =================
 const packs = {
   recruta: { preco: 1000 },
   shichibukai: { preco: 5000 },
@@ -59,12 +59,11 @@ const packs = {
   rei: { preco: 40000 }
 };
 
+// ================= HELPERS =================
 function pegarCarta(raridade) {
   const lista = cartas[raridade];
-  const nome = lista[Math.floor(Math.random() * lista.length)];
-
   return {
-    nome,
+    nome: lista[Math.floor(Math.random() * lista.length)],
     raridade,
     valor: valores[raridade]
   };
@@ -73,14 +72,12 @@ function pegarCarta(raridade) {
 function painelLoja(user, pack, db) {
   const preco = packs[pack].preco;
   const saldo = db[user.id].dinheiro;
-  const restante = saldo - preco;
 
   return new EmbedBuilder()
     .setTitle(`Pacote: ${pack}`)
     .setDescription(
 `💰 Preço: ${preco} GC
-💳 Seu saldo: ${saldo} GC
-📉 Após compra: ${restante >= 0 ? restante : "Saldo insuficiente"}`
+💳 Seu saldo: ${saldo} GC`
     )
     .setColor("#2b2d31");
 }
@@ -88,7 +85,7 @@ function painelLoja(user, pack, db) {
 // ================= BOT =================
 client.once('ready', () => console.log("Bot online!"));
 
-// ================= COMANDOS =================
+// ================= MESSAGE =================
 client.on('messageCreate', (msg) => {
   if (msg.author.bot) return;
 
@@ -96,195 +93,154 @@ client.on('messageCreate', (msg) => {
   const id = msg.author.id;
   garantirUser(db, id);
 
-  // 🎴 RECRUTAR
   if (msg.content === "!recrutar") {
-    const raridades = ["Comum","Raro","Epico","Lendario","Mitico"];
-    const raridade = raridades[Math.floor(Math.random() * raridades.length)];
-    const carta = pegarCarta(raridade);
+    const rar = Object.keys(cartas)[Math.floor(Math.random() * 5)];
+    const carta = pegarCarta(rar);
 
     const embed = new EmbedBuilder()
       .setTitle(carta.nome)
-      .setDescription(`Raridade: ${carta.raridade}\nValor: ${carta.valor} GC`)
+      .setDescription(`${carta.raridade} - ${carta.valor} GC`)
       .setColor("#2b2d31");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`).setLabel("Guardar").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`).setLabel("Vender").setEmoji("🏴‍☠️").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`).setLabel("Vender").setStyle(ButtonStyle.Danger)
     );
 
     return msg.reply({ embeds: [embed], components: [row] });
   }
 
-  // 🛒 LOJA
   if (msg.content === "!loja") {
     let db = carregarDB();
 
     const select = new StringSelectMenuBuilder()
       .setCustomId(`pack_${id}`)
       .setPlaceholder("Escolha um pacote")
-      .addOptions(
-        Object.keys(packs).map(p => ({
-          label: p,
-          value: p
-        }))
-      );
+      .addOptions(Object.keys(packs).map(p => ({ label: p, value: p })));
 
     const row = new ActionRowBuilder().addComponents(select);
 
-    const confirm = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`confirm_${id}_recruta`)
-        .setLabel("Comprar")
-        .setStyle(ButtonStyle.Success)
-    );
-
     return msg.reply({
       embeds: [painelLoja(msg.author, "recruta", db)],
-      components: [row, confirm]
+      components: [row]
     });
   }
 
-  // 📜 COLEÇÃO MENU
-  if (msg.content === "!colecao") {
-    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`view_${id}`)
-      .setPlaceholder("Ver carta")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c,
-          value: i.toString()
-        }))
-      );
-
-    return msg.reply({
-      content: "Sua coleção:",
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
-
-  // 💰 VENDER MENU
   if (msg.content === "!vender") {
+    let db = carregarDB();
     if (!db[id].cartas.length) return msg.reply("Sem cartas.");
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`sell_${id}`)
       .setPlaceholder("Vender carta")
-      .addOptions(
-        db[id].cartas.map((c, i) => ({
-          label: c,
-          value: i.toString()
-        }))
-      );
+      .addOptions(db[id].cartas.map((c, i) => ({ label: c, value: String(i) })));
 
     return msg.reply({
-      content: "Escolha uma carta:",
       components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 });
 
-// ================= INTERAÇÕES =================
+// ================= INTERACTIONS (ANTI CRASH TOTAL) =================
 client.on('interactionCreate', async (i) => {
-  let db = carregarDB();
+  try {
+    let db = carregarDB();
+    if (!i.customId) return;
 
-  if (!i.customId) return;
+    const parts = i.customId.split("_");
 
-  // ================= PROTEÇÃO SEGURA =================
-  let userId = null;
+    const type = parts[0];
+    const id = parts[1];
 
-  if (i.customId.startsWith("g_") || i.customId.startsWith("v_")) {
-    userId = i.customId.split("_")[1];
-  }
-
-  if (i.customId.startsWith("confirm_")) {
-    userId = i.customId.split("_")[1];
-  }
-
-  if (i.customId.startsWith("pack_") || i.customId.startsWith("sell_") || i.customId.startsWith("view_")) {
-    userId = i.customId.split("_")[1];
-  }
-
-  if (userId && i.user.id !== userId) {
-    return i.reply({ content: "Isso não é pra você.", ephemeral: true });
-  }
-
-  // ================= BOTÕES =================
-  if (i.isButton()) {
-
-    if (i.customId.startsWith("g_")) {
-      const [, id, nome, raridade] = i.customId.split("_");
-      db[id].cartas.push(`${nome} (${raridade})`);
-      salvarDB(db);
-      return i.update({ content: "Guardado!", components: [] });
+    if (id && i.user.id !== id) {
+      return i.reply({ content: "Isso não é pra você.", ephemeral: true });
     }
 
-    if (i.customId.startsWith("v_")) {
-      const [, id, , raridade] = i.customId.split("_");
-      db[id].dinheiro += valores[raridade];
-      salvarDB(db);
-      return i.update({ content: "Vendido!", components: [] });
+    garantirUser(db, id);
+
+    // ================= BUTTONS =================
+    if (i.isButton()) {
+
+      if (type === "g") {
+        const [, id, nome, raridade] = parts;
+        db[id].cartas.push(`${nome} (${raridade})`);
+        salvarDB(db);
+        return i.update({ content: "Guardado!", components: [] });
+      }
+
+      if (type === "v") {
+        const raridade = parts[3];
+        db[id].dinheiro += valores[raridade];
+        salvarDB(db);
+        return i.update({ content: "Vendido!", components: [] });
+      }
+
+      if (type === "confirm") {
+        const pack = parts[2];
+
+        if (db[id].dinheiro < packs[pack].preco)
+          return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+
+        db[id].dinheiro -= packs[pack].preco;
+
+        const rar = Object.keys(cartas)[Math.floor(Math.random() * 5)];
+        const carta = pegarCarta(rar);
+
+        salvarDB(db);
+
+        return i.update({
+          content: `Você ganhou: ${carta.nome}`,
+          components: []
+        });
+      }
     }
 
-    if (i.customId.startsWith("confirm_")) {
-      const [, id, pack] = i.customId.split("_");
+    // ================= SELECT =================
+    if (i.isStringSelectMenu()) {
 
-      if (db[id].dinheiro < packs[pack].preco)
-        return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+      const tipo = parts[0];
 
-      db[id].dinheiro -= packs[pack].preco;
+      if (tipo === "pack") {
+        const pack = i.values[0];
 
-      const raridades = Object.keys(cartas);
-      const raridade = raridades[Math.floor(Math.random() * raridades.length)];
-      const carta = pegarCarta(raridade);
+        const confirm = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`confirm_${id}_${pack}`)
+            .setLabel("Comprar")
+            .setStyle(ButtonStyle.Success)
+        );
 
-      salvarDB(db);
+        return i.update({
+          embeds: [painelLoja(i.user, pack, db)],
+          components: [i.message.components[0], confirm]
+        });
+      }
 
-      return i.update({
-        content: `Você ganhou: ${carta.nome}`,
-        components: []
-      });
-    }
-  }
+      if (tipo === "sell") {
+        const index = i.values[0];
+        const carta = db[id].cartas[index];
+        const rar = carta.match(/\((.*?)\)/)[1];
 
-  // ================= SELECT MENU =================
-  if (i.isStringSelectMenu()) {
+        db[id].dinheiro += valores[rar];
+        db[id].cartas.splice(index, 1);
+        salvarDB(db);
 
-    const [tipo, id] = i.customId.split("_");
+        return i.update({ content: `Vendeu ${carta}`, components: [] });
+      }
 
-    if (tipo === "pack") {
-      const pack = i.values[0];
-
-      const confirm = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`confirm_${id}_${pack}`)
-          .setLabel("Comprar")
-          .setStyle(ButtonStyle.Success)
-      );
-
-      return i.update({
-        embeds: [painelLoja(i.user, pack, db)],
-        components: [i.message.components[0], confirm]
-      });
+      if (tipo === "view") {
+        return i.update({ content: db[id].cartas[i.values[0]] });
+      }
     }
 
-    if (tipo === "sell") {
-      const index = i.values[0];
-      const carta = db[id].cartas[index];
-      const raridade = carta.match(/\((.*?)\)/)[1];
+  } catch (err) {
+    console.log("ERRO INTERACTION:", err);
 
-      db[id].dinheiro += valores[raridade];
-      db[id].cartas.splice(index, 1);
-      salvarDB(db);
-
-      return i.update({ content: `Vendeu ${carta}`, components: [] });
-    }
-
-    if (tipo === "view") {
-      const carta = db[id].cartas[i.values[0]];
-      return i.update({ content: `Carta: ${carta}` });
-    }
+    if (i.replied || i.deferred) return;
+    return i.reply({
+      content: "Ocorreu um erro na interação.",
+      ephemeral: true
+    });
   }
 });
 
