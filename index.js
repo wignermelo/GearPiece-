@@ -1,9 +1,9 @@
-const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
+const { 
+  Client, 
+  GatewayIntentBits, 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
   ButtonStyle,
   StringSelectMenuBuilder
 } = require('discord.js');
@@ -61,7 +61,6 @@ const valores = {
   Mitico: 30000
 };
 
-// ================= CHANCES =================
 const chances = {
   Comum: 60,
   Raro: 30,
@@ -78,7 +77,6 @@ function rolarRaridade() {
     soma += chances[t];
     if (r <= soma) return t;
   }
-
   return "Comum";
 }
 
@@ -139,12 +137,10 @@ client.on("messageCreate", (msg) => {
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`pack|${id}`)
       .setPlaceholder("Escolha um pacote")
-      .addOptions(
-        Object.keys(packs).map(p => ({
-          label: p,
-          value: p
-        }))
-      );
+      .addOptions(Object.keys(packs).map(p => ({
+        label: p,
+        value: p
+      })));
 
     return msg.reply({
       embeds: [
@@ -157,30 +153,49 @@ client.on("messageCreate", (msg) => {
     });
   }
 
-  // 📦 PACOTES
-  if (msg.content === "!pacote") {
-    const user = db[id];
-
-    const options = Object.keys(user.pacotes)
-      .filter(p => user.pacotes[p] > 0)
-      .map(p => ({
-        label: `${p} (${user.pacotes[p]})`,
-        value: p
-      }));
-
-    if (!options.length) return msg.reply("Sem pacotes.");
+  // 📜 COLEÇÃO (FIXADO)
+  if (msg.content === "!colecao") {
+    if (!db[id].cartas.length)
+      return msg.reply("Você não tem cartas.");
 
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`open|${id}`)
-      .setPlaceholder("Abrir pacote")
-      .addOptions(options);
+      .setCustomId(`view|${id}`)
+      .setPlaceholder("Ver carta da coleção")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: String(i)
+        }))
+      );
 
     return msg.reply({
+      content: "📜 Sua coleção:",
       components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 
-  // 💰 CARTEIRA (fix que você perdeu antes)
+  // 💰 VENDER (NOVO FIXADO)
+  if (msg.content === "!vender") {
+    if (!db[id].cartas.length)
+      return msg.reply("Você não tem cartas para vender.");
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`sell|${id}`)
+      .setPlaceholder("Selecione carta para vender")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: String(i)
+        }))
+      );
+
+    return msg.reply({
+      content: "💰 Venda sua carta:",
+      components: [new ActionRowBuilder().addComponents(menu)]
+    });
+  }
+
+  // 💰 CARTEIRA
   if (msg.content === "!carteira") {
     return msg.reply(`💰 Você tem ${db[id].dinheiro} GC`);
   }
@@ -199,9 +214,8 @@ client.on("interactionCreate", async (i) => {
 
     garantirUser(db, id);
 
-    if (i.user.id !== id) {
+    if (i.user.id !== id)
       return i.reply({ content: "Isso não é pra você.", ephemeral: true });
-    }
 
     // ================= BUTTONS =================
     if (i.isButton()) {
@@ -224,24 +238,56 @@ client.on("interactionCreate", async (i) => {
 
         return i.update({ content: "Vendido!", components: [] });
       }
+
+      if (type === "buy") {
+        const pack = parts[2];
+
+        if (db[id].dinheiro < packs[pack])
+          return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+
+        db[id].dinheiro -= packs[pack];
+        db[id].pacotes[pack]++;
+
+        salvarDB(db);
+
+        return i.update({ content: `Comprou ${pack}`, components: [] });
+      }
     }
 
     // ================= SELECT =================
     if (i.isStringSelectMenu()) {
 
+      if (type === "sell") {
+        const index = i.values[0];
+        const carta = db[id].cartas[index];
+
+        const rar = carta.match(/\((.*?)\)/)[1];
+
+        db[id].dinheiro += valores[rar];
+        db[id].cartas.splice(index, 1);
+
+        salvarDB(db);
+
+        return i.update({ content: `Vendeu ${carta}`, components: [] });
+      }
+
+      if (type === "view") {
+        const carta = db[id].cartas[i.values[0]];
+
+        return i.update({
+          content: `📜 Carta: ${carta}`,
+          components: []
+        });
+      }
+
       if (type === "pack") {
         const pack = i.values[0];
-
-        const preco = packs[pack];
-        const saldo = db[id].dinheiro;
 
         return i.update({
           embeds: [
             new EmbedBuilder()
               .setTitle(`Pacote: ${pack}`)
-              .setDescription(
-                `💰 Preço: ${preco}\n💳 Seu saldo: ${saldo}`
-              )
+              .setDescription(`Preço: ${packs[pack]} GC`)
               .setColor("#2b2d31")
           ],
           components: [
@@ -254,45 +300,6 @@ client.on("interactionCreate", async (i) => {
           ]
         });
       }
-
-      if (type === "open") {
-        const pack = i.values[0];
-
-        if (db[id].pacotes[pack] <= 0)
-          return i.reply({ content: "Sem pacotes.", ephemeral: true });
-
-        db[id].pacotes[pack]--;
-
-        const rar = rolarRaridade();
-        const carta = pegarCarta(rar);
-
-        db[id].cartas.push(`${carta.nome} (${carta.rar})`);
-
-        salvarDB(db);
-
-        return i.update({
-          content: `Abriu ${pack} e ganhou ${carta.nome}`,
-          components: []
-        });
-      }
-    }
-
-    // ================= BUY =================
-    if (type === "buy") {
-      const pack = parts[2];
-
-      if (db[id].dinheiro < packs[pack])
-        return i.reply({ content: "Sem dinheiro.", ephemeral: true });
-
-      db[id].dinheiro -= packs[pack];
-      db[id].pacotes[pack]++;
-
-      salvarDB(db);
-
-      return i.update({
-        content: `Comprou ${pack}`,
-        components: []
-      });
     }
 
   } catch (err) {
