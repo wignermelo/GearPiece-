@@ -115,8 +115,10 @@ client.on('messageCreate', (msg) => {
     return msg.reply({ embeds: [embed], components: [row] });
   }
 
-  // 🛒 LOJA NOVA
+  // 🛒 LOJA
   if (msg.content === "!loja") {
+    let db = carregarDB();
+
     const select = new StringSelectMenuBuilder()
       .setCustomId(`pack_${id}`)
       .setPlaceholder("Escolha um pacote")
@@ -130,7 +132,10 @@ client.on('messageCreate', (msg) => {
     const row = new ActionRowBuilder().addComponents(select);
 
     const confirm = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`confirm_${id}_recruta`).setLabel("Comprar").setStyle(ButtonStyle.Success)
+      new ButtonBuilder()
+        .setCustomId(`confirm_${id}_recruta`)
+        .setLabel("Comprar")
+        .setStyle(ButtonStyle.Success)
     );
 
     return msg.reply({
@@ -184,7 +189,9 @@ client.on('messageCreate', (msg) => {
 client.on('interactionCreate', async (i) => {
   let db = carregarDB();
 
-  // ================= PROTEÇÃO INTELIGENTE =================
+  if (!i.customId) return;
+
+  // ================= PROTEÇÃO SEGURA =================
   let userId = null;
 
   if (i.customId.startsWith("g_") || i.customId.startsWith("v_")) {
@@ -202,13 +209,8 @@ client.on('interactionCreate', async (i) => {
   if (userId && i.user.id !== userId) {
     return i.reply({ content: "Isso não é pra você.", ephemeral: true });
   }
-  // 🔒 PROTEÇÃO GLOBAL
-  const id = i.customId.split("_")[1];
-  if (id && i.user.id !== id) {
-    return i.reply({ content: "Isso não é pra você.", ephemeral: true });
-  }
 
-  // BOTÕES
+  // ================= BOTÕES =================
   if (i.isButton()) {
 
     if (i.customId.startsWith("g_")) {
@@ -233,16 +235,20 @@ client.on('interactionCreate', async (i) => {
 
       db[id].dinheiro -= packs[pack].preco;
 
-      const raridade = Object.keys(cartas)[Math.floor(Math.random()*5)];
+      const raridades = Object.keys(cartas);
+      const raridade = raridades[Math.floor(Math.random() * raridades.length)];
       const carta = pegarCarta(raridade);
 
       salvarDB(db);
 
-      return i.reply({ content: `Você ganhou: ${carta.nome}` });
+      return i.update({
+        content: `Você ganhou: ${carta.nome}`,
+        components: []
+      });
     }
   }
 
-  // SELECT MENU
+  // ================= SELECT MENU =================
   if (i.isStringSelectMenu()) {
 
     const [tipo, id] = i.customId.split("_");
@@ -251,7 +257,10 @@ client.on('interactionCreate', async (i) => {
       const pack = i.values[0];
 
       const confirm = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`confirm_${id}_${pack}`).setLabel("Comprar").setStyle(ButtonStyle.Success)
+        new ButtonBuilder()
+          .setCustomId(`confirm_${id}_${pack}`)
+          .setLabel("Comprar")
+          .setStyle(ButtonStyle.Success)
       );
 
       return i.update({
