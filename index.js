@@ -61,6 +61,7 @@ const valores = {
   Mitico: 30000
 };
 
+// ================= CHANCES =================
 const chances = {
   Comum: 60,
   Raro: 30,
@@ -92,6 +93,8 @@ const packs = {
 // ================= HELP =================
 function pegarCarta(rar) {
   const list = cartas[rar];
+  if (!list) return { nome: "Carta Desconhecida", rar, valor: 0 };
+
   const nome = list[Math.floor(Math.random() * list.length)];
   return { nome, rar, valor: valores[rar] };
 }
@@ -114,7 +117,7 @@ client.on("messageCreate", (msg) => {
 
     const embed = new EmbedBuilder()
       .setTitle(carta.nome)
-      .setDescription(`Raridade: ${carta.rar}\nValor: ${carta.valor}`)
+      .setDescription(`${carta.rar} - ${carta.valor} GC`)
       .setColor("#2b2d31");
 
     const row = new ActionRowBuilder().addComponents(
@@ -124,7 +127,7 @@ client.on("messageCreate", (msg) => {
         .setStyle(ButtonStyle.Success),
 
       new ButtonBuilder()
-        .setCustomId(`v|${id}|${carta.rar}`)
+        .setCustomId(`v|${id}|${carta.nome}|${carta.rar}`)
         .setLabel("Vender")
         .setStyle(ButtonStyle.Danger)
     );
@@ -155,7 +158,7 @@ client.on("messageCreate", (msg) => {
     });
   }
 
-  // 📦 PACOTES (FIXADO)
+  // 📦 PACOTES
   if (msg.content === "!pacote") {
     const user = db[id];
 
@@ -178,12 +181,7 @@ client.on("messageCreate", (msg) => {
     });
   }
 
-  // 💰 CARTEIRA (FIXADO)
-  if (msg.content === "!carteira") {
-    return msg.reply(`💰 Você tem ${db[id].dinheiro} GC`);
-  }
-
-  // 📜 COLEÇÃO (FIXADO)
+  // 📜 COLEÇÃO
   if (msg.content === "!colecao") {
     if (!db[id].cartas.length)
       return msg.reply("Você não tem cartas.");
@@ -203,7 +201,7 @@ client.on("messageCreate", (msg) => {
     });
   }
 
-  // 💰 VENDER (FIXADO)
+  // 💰 VENDER
   if (msg.content === "!vender") {
     if (!db[id].cartas.length)
       return msg.reply("Sem cartas.");
@@ -222,6 +220,11 @@ client.on("messageCreate", (msg) => {
       components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
+
+  // 💰 CARTEIRA
+  if (msg.content === "!carteira") {
+    return msg.reply(`💰 Você tem ${db[id].dinheiro} GC`);
+  }
 });
 
 // ================= INTERACTIONS =================
@@ -230,23 +233,20 @@ client.on("interactionCreate", async (i) => {
     if (!i.customId) return;
 
     const db = carregarDB();
-    const parts = i.customId.split("|");
+    const [type, id, ...args] = i.customId.split("|");
 
-    const type = parts[0];
-    const id = parts[1];
+    if (!id || i.user.id !== id) {
+      return i.reply({ content: "Não é pra você.", ephemeral: true });
+    }
 
     garantirUser(db, id);
-
-    if (i.user.id !== id) {
-      return i.reply({ content: "Não é seu botão.", ephemeral: true });
-    }
 
     // ================= BUTTONS =================
     if (i.isButton()) {
 
       if (type === "g") {
-        const nome = parts[2];
-        const rar = parts[3];
+        const nome = args[0];
+        const rar = args[1];
 
         db[id].cartas.push(`${nome} (${rar})`);
         salvarDB(db);
@@ -255,7 +255,7 @@ client.on("interactionCreate", async (i) => {
       }
 
       if (type === "v") {
-        const rar = parts[2];
+        const rar = args[1];
 
         db[id].dinheiro += valores[rar];
         salvarDB(db);
@@ -264,7 +264,7 @@ client.on("interactionCreate", async (i) => {
       }
 
       if (type === "buy") {
-        const pack = parts[2];
+        const pack = args[0];
 
         if (db[id].dinheiro < packs[pack])
           return i.reply({ content: "Sem dinheiro.", ephemeral: true });
@@ -288,7 +288,7 @@ client.on("interactionCreate", async (i) => {
           embeds: [
             new EmbedBuilder()
               .setTitle(`Pacote: ${pack}`)
-              .setDescription(`Preço: ${packs[pack]}`)
+              .setDescription(`Preço: ${packs[pack]} GC`)
               .setColor("#2b2d31")
           ],
           components: [
