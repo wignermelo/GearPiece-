@@ -1,9 +1,9 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
+const {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder
 } = require('discord.js');
@@ -12,8 +12,8 @@ const fs = require('fs');
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
   ]
 });
@@ -61,7 +61,7 @@ const valores = {
   Mitico: 30000
 };
 
-// ================= 🔥 CHANCES RESTAURADAS =================
+// ================= CHANCES =================
 const chances = {
   Comum: 60,
   Raro: 30,
@@ -74,9 +74,9 @@ function rolarRaridade() {
   const r = Math.random() * 100;
   let soma = 0;
 
-  for (let tipo in chances) {
-    soma += chances[tipo];
-    if (r <= soma) return tipo;
+  for (let t in chances) {
+    soma += chances[t];
+    if (r <= soma) return t;
   }
 
   return "Comum";
@@ -108,37 +108,35 @@ client.once('ready', () => console.log("Bot online!"));
 client.on('messageCreate', (msg) => {
   if (msg.author.bot) return;
 
-  let db = carregarDB();
+  const db = carregarDB();
   const id = msg.author.id;
   garantirUser(db, id);
 
-  // 🎴 RECRUTAR (AGORA COM % REAL)
+  // 🎴 RECRUTAR
   if (msg.content === "!recrutar") {
-
-    const rar = rolarRaridade(); // 🔥 AQUI ESTÁ O FIX
+    const rar = rolarRaridade();
     const carta = pegarCarta(rar);
 
-    const embed = new EmbedBuilder()
-      .setTitle(carta.nome)
-      .setDescription(
-`✨ Raridade: ${carta.raridade}
-💰 Valor: ${carta.valor} GC`
-      )
-      .setColor("#2b2d31");
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`)
-        .setLabel("Guardar")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`)
-        .setLabel("Vender")
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    return msg.reply({ embeds: [embed], components: [row] });
+    return msg.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(carta.nome)
+          .setDescription(`Raridade: ${carta.raridade}\nValor: ${carta.valor}`)
+          .setColor("#2b2d31")
+      ],
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`g_${id}_${carta.nome}_${carta.raridade}`)
+            .setLabel("Guardar")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`v_${id}_${carta.nome}_${carta.raridade}`)
+            .setLabel("Vender")
+            .setStyle(ButtonStyle.Danger)
+        )
+      ]
+    });
   }
 
   // 🛒 LOJA
@@ -157,7 +155,7 @@ client.on('messageCreate', (msg) => {
       embeds: [
         new EmbedBuilder()
           .setTitle("Loja de Pacotes")
-          .setDescription("Escolha um pacote abaixo")
+          .setDescription("Escolha um pacote")
           .setColor("#2b2d31")
       ],
       components: [new ActionRowBuilder().addComponents(select)]
@@ -166,12 +164,12 @@ client.on('messageCreate', (msg) => {
 
   // 📦 PACOTES
   if (msg.content === "!pacote") {
-    let pacotes = db[id].pacotes;
+    const user = db[id];
 
-    const options = Object.keys(pacotes)
-      .filter(p => pacotes[p] > 0)
+    const options = Object.keys(user.pacotes)
+      .filter(p => user.pacotes[p] > 0)
       .map(p => ({
-        label: `${p} (${pacotes[p]})`,
+        label: `${p} (${user.pacotes[p]})`,
         value: p
       }));
 
@@ -187,34 +185,38 @@ client.on('messageCreate', (msg) => {
     });
   }
 
-  // 💰 VENDER MENU
-  if (msg.content === "!vender") {
-    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`sell_${id}`)
-      .setPlaceholder("Vender carta")
-      .addOptions(db[id].cartas.map((c, i) => ({
-        label: c,
-        value: String(i)
-      })));
-
-    return msg.reply({
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
-
   // 📜 COLEÇÃO
   if (msg.content === "!colecao") {
     if (!db[id].cartas.length) return msg.reply("Sem cartas.");
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`view_${id}`)
-      .setPlaceholder("Ver carta")
-      .addOptions(db[id].cartas.map((c, i) => ({
-        label: c,
-        value: String(i)
-      })));
+      .setPlaceholder("Ver coleção")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: String(i)
+        }))
+      );
+
+    return msg.reply({
+      components: [new ActionRowBuilder().addComponents(menu)]
+    });
+  }
+
+  // 💰 VENDER
+  if (msg.content === "!vender") {
+    if (!db[id].cartas.length) return msg.reply("Sem cartas.");
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`sell_${id}`)
+      .setPlaceholder("Vender carta")
+      .addOptions(
+        db[id].cartas.map((c, i) => ({
+          label: c,
+          value: String(i)
+        }))
+      );
 
     return msg.reply({
       components: [new ActionRowBuilder().addComponents(menu)]
@@ -225,34 +227,52 @@ client.on('messageCreate', (msg) => {
 // ================= INTERACTIONS =================
 client.on('interactionCreate', async (i) => {
   try {
-    let db = carregarDB();
     if (!i.customId) return;
 
+    const db = carregarDB();
     const parts = i.customId.split("_");
     const type = parts[0];
-    const userId = parts[1];
+    const userId = parts[1] || i.user.id;
 
+    garantirUser(db, userId);
+
+    // 🔒 SEGURANÇA
     if (userId && i.user.id !== userId) {
       return i.reply({ content: "Isso não é pra você.", ephemeral: true });
     }
-
-    garantirUser(db, i.user.id);
 
     // ================= BUTTONS =================
     if (i.isButton()) {
 
       if (type === "g") {
-        const [, id, nome, raridade] = parts;
-        db[id].cartas.push(`${nome} (${raridade})`);
+        const [, id, nome, rar] = parts;
+        db[id].cartas.push(`${nome} (${rar})`);
         salvarDB(db);
         return i.update({ content: "Guardado!", components: [] });
       }
 
       if (type === "v") {
-        const raridade = parts[3];
-        db[userId].dinheiro += valores[raridade];
+        const rar = parts[3];
+        db[userId].dinheiro += valores[rar];
         salvarDB(db);
         return i.update({ content: "Vendido!", components: [] });
+      }
+
+      if (type === "confirm") {
+        const pack = parts[2];
+
+        if (db[userId].dinheiro < packs[pack].preco)
+          return i.reply({ content: "Sem dinheiro.", ephemeral: true });
+
+        db[userId].dinheiro -= packs[pack].preco;
+        db[userId].pacotes[pack]++;
+
+        salvarDB(db);
+
+        return i.update({
+          content: `Comprou pacote ${pack}`,
+          components: []
+        });
       }
     }
 
@@ -266,7 +286,7 @@ client.on('interactionCreate', async (i) => {
           embeds: [
             new EmbedBuilder()
               .setTitle(`Pacote: ${pack}`)
-              .setDescription(`Preço: ${packs[pack].preco} GC`)
+              .setDescription(`Preço: ${packs[pack].preco}`)
               .setColor("#2b2d31")
           ],
           components: [
@@ -288,7 +308,7 @@ client.on('interactionCreate', async (i) => {
 
         db[userId].pacotes[pack]--;
 
-        const rar = rolarRaridade(); // 🔥 aqui também ficou melhor
+        const rar = rolarRaridade();
         const carta = pegarCarta(rar);
 
         db[userId].cartas.push(`${carta.nome} (${carta.raridade})`);
@@ -296,9 +316,25 @@ client.on('interactionCreate', async (i) => {
         salvarDB(db);
 
         return i.update({
-          content: `📦 Você abriu ${pack} e ganhou ${carta.nome}`,
+          content: `Abriu ${pack} e ganhou ${carta.nome}`,
           components: []
         });
+      }
+
+      if (type === "sell") {
+        const index = i.values[0];
+        const carta = db[userId].cartas[index];
+        const rar = carta.match(/\((.*?)\)/)[1];
+
+        db[userId].dinheiro += valores[rar];
+        db[userId].cartas.splice(index, 1);
+        salvarDB(db);
+
+        return i.update({ content: `Vendeu ${carta}`, components: [] });
+      }
+
+      if (type === "view") {
+        return i.update({ content: db[userId].cartas[i.values[0]] });
       }
     }
 
