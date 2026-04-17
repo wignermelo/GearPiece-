@@ -1,14 +1,14 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
+const {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder
-} = require('discord.js');
+} = require("discord.js");
 
-const fs = require('fs');
+const fs = require("fs");
 
 const client = new Client({
   intents: [
@@ -20,12 +20,12 @@ const client = new Client({
 
 // ================= DB =================
 function carregarDB() {
-  if (!fs.existsSync('./db.json')) fs.writeFileSync('./db.json', '{}');
-  return JSON.parse(fs.readFileSync('./db.json'));
+  if (!fs.existsSync("./db.json")) fs.writeFileSync("./db.json", "{}");
+  return JSON.parse(fs.readFileSync("./db.json"));
 }
 
 function salvarDB(db) {
-  fs.writeFileSync('./db.json', JSON.stringify(db, null, 2));
+  fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
 }
 
 function garantirUser(db, id) {
@@ -61,6 +61,7 @@ const valores = {
   Mitico: 30000
 };
 
+// ================= CHANCES =================
 const chances = {
   Comum: 60,
   Raro: 30,
@@ -91,8 +92,8 @@ const packs = {
 
 // ================= HELP =================
 function pegarCarta(rar) {
-  const list = cartas[rar];
-  const nome = list[Math.floor(Math.random() * list.length)];
+  const lista = cartas[rar];
+  const nome = lista[Math.floor(Math.random() * lista.length)];
   return { nome, rar, valor: valores[rar] };
 }
 
@@ -114,17 +115,17 @@ client.on("messageCreate", (msg) => {
 
     const embed = new EmbedBuilder()
       .setTitle(carta.nome)
-      .setDescription(`${carta.rar} - ${carta.valor} GC`)
+      .setDescription(`Raridade: ${carta.rar}\nValor: ${carta.valor}`)
       .setColor("#2b2d31");
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`g|${id}|${carta.nome}|${carta.rar}`)
+        .setCustomId(`g:${id}:${carta.nome}:${carta.rar}`)
         .setLabel("Guardar")
         .setStyle(ButtonStyle.Success),
 
       new ButtonBuilder()
-        .setCustomId(`v|${id}|${carta.rar}`)
+        .setCustomId(`v:${id}:${carta.rar}`)
         .setLabel("Vender")
         .setStyle(ButtonStyle.Danger)
     );
@@ -135,17 +136,19 @@ client.on("messageCreate", (msg) => {
   // 🛒 LOJA
   if (msg.content === "!loja") {
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`pack|${id}`)
+      .setCustomId(`pack:${id}`)
       .setPlaceholder("Escolha um pacote")
-      .addOptions(Object.keys(packs).map(p => ({
-        label: p,
-        value: p
-      })));
+      .addOptions(
+        Object.keys(packs).map(p => ({
+          label: p,
+          value: p
+        }))
+      );
 
     return msg.reply({
       embeds: [
         new EmbedBuilder()
-          .setTitle("Loja de Pacotes")
+          .setTitle("Loja")
           .setDescription("Escolha um pacote")
           .setColor("#2b2d31")
       ],
@@ -153,14 +156,14 @@ client.on("messageCreate", (msg) => {
     });
   }
 
-  // 📜 COLEÇÃO (FIXADO)
+  // 📜 COLEÇÃO (FIX TOTAL)
   if (msg.content === "!colecao") {
     if (!db[id].cartas.length)
       return msg.reply("Você não tem cartas.");
 
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`view|${id}`)
-      .setPlaceholder("Ver carta da coleção")
+      .setCustomId(`view:${id}`)
+      .setPlaceholder("Ver carta")
       .addOptions(
         db[id].cartas.map((c, i) => ({
           label: c,
@@ -169,19 +172,18 @@ client.on("messageCreate", (msg) => {
       );
 
     return msg.reply({
-      content: "📜 Sua coleção:",
       components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 
-  // 💰 VENDER (NOVO FIXADO)
+  // 💰 VENDER (FIX TOTAL)
   if (msg.content === "!vender") {
     if (!db[id].cartas.length)
-      return msg.reply("Você não tem cartas para vender.");
+      return msg.reply("Sem cartas.");
 
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(`sell|${id}`)
-      .setPlaceholder("Selecione carta para vender")
+      .setCustomId(`sell:${id}`)
+      .setPlaceholder("Vender carta")
       .addOptions(
         db[id].cartas.map((c, i) => ({
           label: c,
@@ -190,39 +192,37 @@ client.on("messageCreate", (msg) => {
       );
 
     return msg.reply({
-      content: "💰 Venda sua carta:",
       components: [new ActionRowBuilder().addComponents(menu)]
     });
   }
 
   // 💰 CARTEIRA
   if (msg.content === "!carteira") {
-    return msg.reply(`💰 Você tem ${db[id].dinheiro} GC`);
+    return msg.reply(`💰 ${db[id].dinheiro} GC`);
   }
 });
 
-// ================= INTERACTIONS =================
+// ================= INTERACTIONS (ZERO CRASH) =================
 client.on("interactionCreate", async (i) => {
   try {
     if (!i.customId) return;
 
     const db = carregarDB();
-    const parts = i.customId.split("|");
 
-    const type = parts[0];
-    const id = parts[1];
+    const [type, id, ...args] = i.customId.split(":");
+
+    if (i.user.id !== id) {
+      return i.reply({ content: "Não é seu botão.", ephemeral: true });
+    }
 
     garantirUser(db, id);
-
-    if (i.user.id !== id)
-      return i.reply({ content: "Isso não é pra você.", ephemeral: true });
 
     // ================= BUTTONS =================
     if (i.isButton()) {
 
       if (type === "g") {
-        const nome = parts[2];
-        const rar = parts[3];
+        const nome = args[0];
+        const rar = args[1];
 
         db[id].cartas.push(`${nome} (${rar})`);
         salvarDB(db);
@@ -231,7 +231,7 @@ client.on("interactionCreate", async (i) => {
       }
 
       if (type === "v") {
-        const rar = parts[2];
+        const rar = args[0];
 
         db[id].dinheiro += valores[rar];
         salvarDB(db);
@@ -240,7 +240,7 @@ client.on("interactionCreate", async (i) => {
       }
 
       if (type === "buy") {
-        const pack = parts[2];
+        const pack = args[0];
 
         if (db[id].dinheiro < packs[pack])
           return i.reply({ content: "Sem dinheiro.", ephemeral: true });
@@ -257,6 +257,27 @@ client.on("interactionCreate", async (i) => {
     // ================= SELECT =================
     if (i.isStringSelectMenu()) {
 
+      if (type === "pack") {
+        const pack = i.values[0];
+
+        return i.update({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(`Pacote: ${pack}`)
+              .setDescription(`Preço: ${packs[pack]}`)
+              .setColor("#2b2d31")
+          ],
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`buy:${id}:${pack}`)
+                .setLabel("Comprar")
+                .setStyle(ButtonStyle.Success)
+            )
+          ]
+        });
+      }
+
       if (type === "sell") {
         const index = i.values[0];
         const carta = db[id].cartas[index];
@@ -272,32 +293,9 @@ client.on("interactionCreate", async (i) => {
       }
 
       if (type === "view") {
-        const carta = db[id].cartas[i.values[0]];
-
         return i.update({
-          content: `📜 Carta: ${carta}`,
+          content: db[id].cartas[i.values[0]],
           components: []
-        });
-      }
-
-      if (type === "pack") {
-        const pack = i.values[0];
-
-        return i.update({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(`Pacote: ${pack}`)
-              .setDescription(`Preço: ${packs[pack]} GC`)
-              .setColor("#2b2d31")
-          ],
-          components: [
-            new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`buy|${id}|${pack}`)
-                .setLabel("Comprar")
-                .setStyle(ButtonStyle.Success)
-            )
-          ]
         });
       }
     }
@@ -306,7 +304,7 @@ client.on("interactionCreate", async (i) => {
     console.log("ERRO:", err);
 
     if (!i.replied) {
-      return i.reply({ content: "Erro interno", ephemeral: true });
+      return i.reply({ content: "Erro na interação", ephemeral: true });
     }
   }
 });
